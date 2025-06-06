@@ -198,7 +198,7 @@ main() {
 
     info "所有操作已成功完成！"
     highlight "SmartDNS 已安装、配置并设置为系统默认 DNS 解析器。"
-    info "您可以使用 'nslookup -querytype=ptr smartdns' 来测试解析。"
+    info "您可以使用 nslookup -querytype=ptr smartdns 来测试解析。"
 }
 
 # --- 脚本执行入口 ---
