@@ -141,6 +141,54 @@ configure_smartdns() {
     fi
     info "新配置文件已成功应用。"
 
+    # --- START: 新增功能 ---
+    info "正在下载并配置 dns_update.sh 脚本..."
+    local dns_update_script_path="/etc/smartdns/dns_update.sh"
+    local dns_update_script_url="https://raw.githubusercontent.com/ddd-zero/smartdns_install/refs/heads/main/dns_update.sh"
+
+    if ! curl -sL "$dns_update_script_url" | ${SUDO} tee "$dns_update_script_path" > /dev/null; then
+        error "下载 dns_update.sh 脚本失败！"
+        exit 1
+    fi
+
+    info "正在为 ${dns_update_script_path} 添加执行权限..."
+    ${SUDO} chmod +x "$dns_update_script_path"
+    info "dns_update.sh 脚本已成功下载并设置权限。"
+
+    # 寻找并修改 systemd service 文件
+    info "正在修改 SmartDNS systemd 服务配置以添加 ExecStartPost..."
+    local service_file_path=""
+    local service_file_modified=false
+    if [ -f "/lib/systemd/system/smartdns.service" ]; then
+        service_file_path="/lib/systemd/system/smartdns.service"
+    elif [ -f "/etc/systemd/system/smartdns.service" ]; then
+        service_file_path="/etc/systemd/system/smartdns.service"
+    fi
+
+    if [ -n "$service_file_path" ]; then
+        info "找到 service 文件: ${service_file_path}"
+        # 检查是否已存在 ExecStartPost，避免重复添加
+        if grep -q -E "^\s*ExecStartPost=" "$service_file_path"; then
+            warn "ExecStartPost 已存在于 service 文件中，跳过修改。"
+        else
+            info "正在添加 ExecStartPost 配置..."
+            # 使用 sed 在 ExecStart=... 行后追加新行
+            ${SUDO} sed -i '/^ExecStart=/a ExecStartPost=/etc/smartdns/dns_update.sh' "$service_file_path"
+            info "service 文件修改成功。"
+            service_file_modified=true
+        fi
+    else
+        error "无法找到 smartdns.service 文件。无法自动配置 ExecStartPost。"
+        warn "请手动将 'ExecStartPost=/etc/smartdns/dns_update.sh' 添加到您的 smartdns 服务文件中，然后运行 'sudo systemctl daemon-reload'。"
+    fi
+
+    # 如果 service 文件被修改，则需要重新加载 systemd daemon
+    if [ "$service_file_modified" = true ]; then
+        info "检测到 service 文件已修改，正在重新加载 systemd daemon..."
+        ${SUDO} systemctl daemon-reload
+    fi
+    # --- END: 新增功能 ---
+
     info "正在重启 SmartDNS 服务以应用新配置..."
     ${SUDO} systemctl restart smartdns
 
@@ -203,8 +251,3 @@ main() {
 
 # --- 脚本执行入口 ---
 main "$@"
-
-
-
-
-
