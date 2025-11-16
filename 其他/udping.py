@@ -36,22 +36,15 @@ if __name__ == "__main__":
     parser.add_argument("-c", "--count", type=int, default=4, help="Number of packets to send (ignored if -t is used).")
     parser.add_argument("-t", action="store_true", help="Ping the specified host until stopped (Ctrl+C).")
     parser.add_argument("-w", "--timeout", type=float, default=1.0, help="Wait timeout in seconds for each reply.")
-    
-    # ===================================================================
-    # == 这里是定义包大小参数的地方
-    # ===================================================================
     parser.add_argument("-s", "--size", type=int, default=64, help="Size of the packet data in bytes.")
     
     args = parser.parse_args()
     
     all_results = []
+    
     try:
         client_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         client_socket.settimeout(args.timeout)
-
-        # ===================================================================
-        # == 这里是使用指定的包大小来创建数据包的地方
-        # ===================================================================
         payload = b'x' * args.size
 
         print(f"Pinging {args.host}:{args.port} with {args.size} bytes of data:")
@@ -67,7 +60,8 @@ if __name__ == "__main__":
             try:
                 send_time = time.time()
                 client_socket.sendto(payload, (args.host, args.port))
-                data, addr = client_socket.recvfrom(1024 + args.size) # 缓冲区要足够大
+                # 缓冲区大小最好比发送的数据大一点
+                data, addr = client_socket.recvfrom(1024 + args.size)
                 recv_time = time.time()
                 rtt = (recv_time - send_time) * 1000
                 received = True
@@ -81,12 +75,20 @@ if __name__ == "__main__":
             if not args.t:
                 i += 1
 
-    except socket.gaierror:
-        print(f"\nError: Hostname '{args.host}' could not be resolved.")
-    except PermissionError:
-        print("\nPermission denied. You might need to run this script with sudo or as an administrator.")
     except KeyboardInterrupt:
         print("\nPing stopped by user.")
-    finally:
+    
+    except socket.gaierror:
+        print(f"\nError: Hostname '{args.host}' could not be resolved.")
+        # 在严重错误后，直接打印统计并退出
         print_statistics(args.host, args.port, all_results)
-        sys.exit(0)
+        sys.exit(1)
+        
+    except PermissionError:
+        print("\nPermission denied. You might need to run this script with sudo or as an administrator.")
+        print_statistics(args.host, args.port, all_results)
+        sys.exit(1)
+
+    # 不论是循环正常结束还是被Ctrl+C中断，都会执行到这里
+    print_statistics(args.host, args.port, all_results)
+    sys.exit(0)
